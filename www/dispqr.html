@@ -1,0 +1,65 @@
+<ons-page id="page2">
+    <ons-toolbar>
+    <div class="center">Print QR code</div>
+  </ons-toolbar>
+
+  <div style=" position: relative;height:100%;">
+    <div style="text-align:center;">
+        <h2 style="position: relative; top:130px;">Print a QR code containing your information</h2>
+        <!--<ons-button modifier="outline" onclick="makeqr()" style="text-align:center; width:90%;">Print QR code</ons-button>-->
+    </div>
+    <div id="qrcode" style="background:white;position: absolute; top: 50%; left: 50%; transform: translateY(-50%) translateX(-50%); -webkit- transform: translateY(-50%) translateX(-50%);"></div>
+  </div>
+
+<script>
+      ons.getScriptPage().onInit = function () {
+          this.onShow = function () {
+              makeqr();
+          }
+      }
+      
+function makeqr(){
+  const jsonObj=localStorage.getItem("datalist");
+  // 暗号化キー
+  var txt_key = myPassPhrase;
+  var utf8_plain = CryptoJS.enc.Utf8.parse(jsonObj);
+  // 暗号化
+  var encrypted = CryptoJS.AES.encrypt(utf8_plain, txt_key);
+  var encrypted_strings = txt_key + "," + encrypted.toString();
+
+  //署名
+  const source = encrypted_strings + "," + sign(encrypted.toString());
+  try {
+      $('#qrcode').html("").qrcode({
+          width: 400,
+          height: 400,
+          text: source,
+      });
+  } catch (e) {
+      $('#qrcode').html("").append("文字数オーバーです：<br>" + e);
+  }
+}
+
+let tabbar = document.querySelector("ons-tabbar"); 
+
+// イベントのキャッチ設定
+hospitalContractInstance.events.StartExamination({}, function(error, event){
+    let contractAddress = event.returnValues.contractAddress;
+    let hospitalAddress = event.returnValues.hospitalAddress;
+    let patientAddress  = event.returnValues.patientAddress; 
+    console.log(event);
+    if(patientAddress == myAddress){
+            examinationContractInstance.options.address = contractAddress;
+            localStorage.setItem("examinationContractAddress", examinationContractInstance.options.address);
+            $("#patientItem").empty();
+            (async function(){
+                await sleep(1000);
+                tabbar.setActiveTab(2);
+            }());
+    }
+});
+
+</script>
+
+
+</ons-page>

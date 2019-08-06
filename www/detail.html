@@ -1,0 +1,251 @@
+<ons-page>
+    <ons-toolbar>
+        <div class="center" id="patientItem1">詳細</div>
+        <div class="right"><ons-button modifier="quiet" onclick="getContractData()"><ons-icon icon="fa-refresh" size="25px"></ons-icon></ons-button></div>
+    </ons-toolbar>
+    <ons-card>
+        <h2>ステータス <ons-icon id="statusIcon" icon="fa-check" style="display:none;color:green;"></ons-icon></h2>
+        <h3 id="depositItem"><span class="itemTitle7">デポジット金額</span><span id="depositValue"></span></h3>
+        <h3><span class="itemTitle7">請求金額</span><span id="outputMedicalCost"></span></h3>
+        <h3 id="unpaidCostItem" style="display:none;"><span class="itemTitle7">未収金金額</span><span id="outputUnpaidCost"></span></h3>
+        <ons-row>
+            <ons-button id="signCostButton" modifier="outline" onclick="printSignQR()" style="width:100%;"><ons-icon icon="fa-qrcode"></ons-icon> 請求金額にサインをする</ons-button>
+        </ons-row>
+    </ons-card>
+    <ons-card>
+        <h2>Payment information</h2>
+        <h3><span class="itemTitle7">Destination</span><span id="contractAddress"></span></h3> 
+        <h3><span class="itemTitle7">Token Info</span><span id="tokenName"></span></h3> 
+        <h3><span class="itemTitle7"></span><span id="tokenSymbol"></span></h3> 
+        <h3><span class="itemTitle7"></span><span id="tokenAddress"></span></h3> 
+    </ons-card>
+    <ons-card>
+        <h2>Peitient Information</h2>
+    <ons-list>
+      <ons-list-header>名前（アルファベット表記）</ons-list-header>
+      <ons-list-item id="_name2" style="margin:1%; height:1em"></ons-list-item>
+
+      <ons-list-header>国籍</ons-list-header>
+      <ons-list-item id="_country2" style="margin:1%; height:1em"></ons-list-item>
+
+      <ons-list-header>宗教上の要望</ons-list-header>
+      <ons-list-item id="_religious_requests2" style="margin:1%; height:1em"></ons-list-item>
+
+      <ons-list-header>母語および母語以外に対応可能な言語</ons-list-header>
+      <ons-list-item id="_language2" style="margin:1%; height:1em"></ons-list-item>
+
+      <ons-list-header>日本での住所と連絡先（在留外国人患者）／滞在先（訪日外国人旅行者患者）</ons-list-header>
+      <ons-list-item id="_destination2" style="margin:1%; height:1em"></ons-list-item>
+
+      <ons-list-header>勤務先</ons-list-header>
+      <ons-list-item id="_work_place2" style="margin:1%; height:1em"></ons-list-item>
+
+      <ons-list-header>日本での滞在期間（訪日外国人旅行者の場合）</ons-list-header>
+      <ons-list-item id="_length_of_stay2" style="margin:1%; height:1em"></ons-list-item>
+
+      <ons-list-header>医療保険加入の有無（公的および民間）</ons-list-header>
+      <ons-list-item id="_medical_insurance2" style="margin:1%; height:1em"></ons-list-item>
+
+      <ons-list-header>支払い方法</ons-list-header>
+      <ons-list-item id="_method_of_payment2" style="margin:1%; height:1em"></ons-list-item>
+
+      <ons-list-header>緊急連絡先</ons-list-header>
+      <ons-list-item id="_emergency_contact2" style="margin:1%; height:1em"></ons-list-item>
+
+      <ons-list-header>宿泊事業者や知人等、付添者の連絡先（訪日外国人旅行者患者の場合）</ons-list-header>
+      <ons-list-item id="_acquaintance2" style="margin:1%; height:1em"></ons-list-item>
+
+      <ons-list-header>その他備考</ons-list-header>
+      <ons-list-item id="_others2" style="margin:1%; height:1em"></ons-list-item>        
+
+    </ons-list>
+    </ons-card>
+<script>
+
+// onInit -> detai.html読み込み時に呼ばれる
+// onShow -> 画面に表示される度に呼ばれる
+ons.getScriptPage().onInit = function () {
+    let examinationContractAddress;
+    let ethPrice;
+    let patientSign;
+    let contractData;
+    let patientAddress;
+    let decryptedPatientPassPhrase;
+    let decryptedPatientData;
+    let depositValue;
+    let medicalCost;
+    let unpaidCost;
+    let signCompleted;
+    let tokenData;
+  
+    this.onShow = function () {
+        getEthPrice();
+        getContractData();
+    }
+}
+
+// Ethereumの現在値を取得
+function getEthPrice(){
+    let request = new XMLHttpRequest();
+    let URL = "https://api.coinmarketcap.com/v2/ticker/1027/?convert=JPY";
+    request.open('GET', URL, false);
+    request.onload = function () {
+        let res = JSON.parse(this.response);
+        ethPrice = res.data.quotes.JPY.price;
+    };
+    request.send();
+}
+
+function sleep (msec) {
+  return new Promise(resolve => setTimeout(resolve, msec))
+}
+
+function setEventCatch(){
+    // コントラクトアドレス宛のERC20の送金をキャッチする
+    // 複数回呼び出されるのでここにwithdrawとか書くと死ぬ - 開いた回数だけ登録されてる
+    erc20ContractInstance.events.Transfer({}, function(error, event){
+      console.log(event);
+        let toAddress = event.returnValues.to;
+        // 最後に開いたページのイベントしか取らない
+        if(toAddress == examinationContractAddress){
+            console.log("Event:Deposit");
+            (async function(){
+                await sleep(500);
+                getContractData();
+            }());
+        }
+    });
+    // 全てのイベントをキャッチする
+    examinationContractInstance.events.allEvents({}, function(error, event){
+      // 勝手にウラで更新されても後でどうせ更新されるのでとりあえず放置する
+      // console.log(event);
+
+      // 医療費の登録完了通知
+      if(event.event === "SetMedicalCost"){
+        console.log("Event:SetMedicalCost");
+          medicalCost = event.returnValues.medicalCost;
+          $("#outputMedicalCost").text((parseFloat(medicalCost)/10**tokenData[2]).toFixed(2) + " " + tokenData[1] + " (" + tokenData[0] + ")");
+          $("#outputUnpaidCost").text((parseFloat(medicalCost)/10**tokenData[2]).toFixed(2) + " " + tokenData[1] + " (" + tokenData[0] + ")");
+      }
+      // 署名の登録完了通知
+      if(event.event === "SignMedicalCost"){
+        console.log("Event:SignMedicalCost");
+          $("#outputUnpaidCost").text($("#outputMedicalCost").text());
+          $("#signCostButton").prop("disabled", true);
+          $("#unpaidCostItem").show();
+          signCompleted = true;
+          hideModal2();
+      }
+      // 支払い通知
+      // TODO:paymentもしくはrefundから出るerc20のtransferに反応してしまう
+      if(event.event === "Payment"){
+          console.log("Event:Payment");
+          unpaidCost = event.returnValues.unpaidCost;
+          $("#outputUnpaidCost").text((parseFloat(unpaidCost)/10**tokenData[2]).toFixed(2) + " " + tokenData[1] + " (" + tokenData[0] + ")");
+      }
+      if(event.event === "Refund"){
+          console.log("Event:Refund");
+          getContractData();
+      }
+      hideModal();
+    });
+}
+// コントラクトの情報を取得
+// 返り値等はSolidityを確認して
+async function getContractData(){
+    showModal("データ取得中")
+    examinationContractAddress = examinationContractInstance.options.address;
+    console.log(typeof examinationContractAddress);
+    if(examinationContractAddress == null){
+      examinationContractAddress = localStorage.getItem("examinationContractAddress");
+      examinationContractInstance.options.address = examinationContractAddress;
+    }
+    console.log(examinationContractAddress);
+    $("#contractAddress").text(examinationContractAddress);
+
+    console.log("test");
+    contractData = await examinationContractInstance.methods.getContractData().call({from: myAddress});
+    console.log(contractData);
+    patientAddress = contractData[0];
+    decryptedPatientData = CryptoJS.AES.decrypt(contractData[1], myPassPhrase).toString(CryptoJS.enc.Utf8);
+    depositValue = contractData[3];
+    medicalCost = contractData[4];
+    unpaidCost = contractData[5];
+    signCompleted = contractData[6];
+    tokenData = contractData[8];
+    // デポジット　・　医療費　・　未収金金額　・　手数料
+    $("#depositValue").text((parseFloat(depositValue)/10**tokenData[2]).toFixed(2) + " " + tokenData[1] + " (" + tokenData[0] + ")");
+    $("#outputMedicalCost").text((parseFloat(medicalCost)/10**tokenData[2]).toFixed(2) + " " + tokenData[1] + " (" + tokenData[0] + ")");
+    $("#outputUnpaidCost").text((parseFloat(unpaidCost)/10**tokenData[2]).toFixed(2) + " " + tokenData[1] + " (" + tokenData[0] + ")");
+    $("#tokenName").text("Name / " + tokenData[0]);
+    $("#tokenSymbol").text("Symbol / " + tokenData[1]);
+    $("#tokenAddress").text("Address / " + erc20Address);
+
+    // 患者情報の表示
+    let decryptedPatientDataJson = JSON.parse(decryptedPatientData);
+    console.log(decryptedPatientDataJson);
+    console.log(decryptedPatientDataJson.name);
+    $('#_name2').text(decryptedPatientDataJson.name);
+    $('#_country2').text(decryptedPatientDataJson.country);
+    $('#_religious_requests2').text(decryptedPatientDataJson.religious_requests);
+    $('#_language2').text(decryptedPatientDataJson.language);
+    $('#_destination2').text(decryptedPatientDataJson.destination);
+    $('#_work_place2').text(decryptedPatientDataJson.work_place);
+    $('#_length_of_stay2').text(decryptedPatientDataJson.length_of_stay);
+    $('#_medical_insurance2').text(decryptedPatientDataJson.medical_insurance);
+    $('#_method_of_payment2').text(decryptedPatientDataJson.method_of_payment);
+    $('#_emergency_contact2').text(decryptedPatientDataJson.emergency_contact);
+    $('#_acquaintance2').text(decryptedPatientDataJson.acquaintance);
+    $('#_others2').text(decryptedPatientDataJson.others);
+console.log("test2");
+    // 請求確定の時
+    if(signCompleted){
+        // 未収金金額の表示
+        $("#unpaidCostItem").show();
+        $("#signCostButton").prop("disabled", true);
+        // 支払い完了の時
+        if(unpaidCost == 0){
+          $("#statusIcon").show();
+        }
+    }else{
+        $("#signCostButton").prop("disabled", false);
+        $("#unpaidCostItem").hide();
+    }
+
+    // イベント設定（本当はここでやるの良くない）
+    setEventCatch();
+
+    hideModal();
+}
+
+
+
+function printSignQR(){
+  $('#QRmodal')[0].show();
+    let signature = sign(String(medicalCost));
+    console.log(signature);
+    $('#setMedicalCostQrcode').html("").qrcode({
+        width: 200,
+        height: 200,
+        text: signature
+    });
+}
+
+function hideModal2(){
+  $('#QRmodal')[0].hide();
+}
+</script>
+
+<ons-modal id="QRmodal" style="background:white;">
+    <ons-toolbar>
+        <div class="left"><ons-back-button onclick="hideModal2()">戻る</ons-back-button></div>
+    </ons-toolbar>
+  <div style=" position: relative;height:100%;">
+    <div style="text-align:center;">
+        <h2 style="position: relative; top:130px;">Print a QR code containing your information</h2>
+        <!--<ons-button modifier="outline" onclick="makeqr()" style="text-align:center; width:90%;">Print QR code</ons-button>-->
+    </div>
+    <div id="setMedicalCostQrcode" style="background:white;position: absolute; top: 50%; left: 50%; transform: translateY(-50%) translateX(-50%); -webkit- transform: translateY(-50%) translateX(-50%);"></div>
+  </div>
+</ons-modal>
+</ons-page>
